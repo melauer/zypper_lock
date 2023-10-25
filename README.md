@@ -1,4 +1,4 @@
-# ansible_zypper_lock
+# zypper_lock
 zypper_lock.py: An Ansible module for managing zypper locklists.
 
 The zypper package manager used by SUSE Linux includes package locking functionality. It maintains a list of package specifications and will not install or update packages which match those specifications. See the "Package Locks Management" of the manual page for zypper for more information.
