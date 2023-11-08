@@ -221,7 +221,9 @@ def main():
         patterns_to_delete = initial_locklist
         if patterns_to_delete and not module.check_mode:
             zypper_command = process_options(options, "removelock")
-            msg = zypper_lock(module, zypper_command, patterns_to_delete)
+            # Instead of having to keep track of which repo each pattern is in, just remove all indexes from last to first.
+            indexes_to_delete = list(reversed(range(1, len(patterns_to_delete)+1)))
+            msg = zypper_lock(module, zypper_command, indexes_to_delete)
             changed = True
 
     # Get a list of changes.
