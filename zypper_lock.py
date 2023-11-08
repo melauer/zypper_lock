@@ -61,9 +61,9 @@ EXAMPLES = r'''
     name: 'tcsh'
     state: present
 
-- name: Prevent the kernel source from being updated.
+- name: Prevent the kernel source srcpackage from being updated.
   zypper_lock:
-    name: 'kernel-default-devel'
+    name: 'kernel-source'
     pkgtype: srcpackage
     state: present
 
