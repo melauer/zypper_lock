@@ -15,38 +15,45 @@ DOCUMENTATION = r'''
 ---
 module: zypper_lock
 
-short_description: Lock and unlock packages in the Zypper package manager.
+short_description: Lock and unlock packages in the C(zypper) package manager.
 
-description: The Zypper package manager has support for Package Locks Management 
-which prevents packages from being updated by locking them. This module is a 
-simple interface to zypper locks management. It takes a list of strings and passes 
-them to "zypper addlock" or "zypper removelock". Presumably the strings are package 
-names, but any string which can be understood by zypper will work.
+description: The C(zypper) package manager has support for Package Locks Management
+which prevents packages from being updated by locking them. This module is a
+simple interface to C(zypper) locks management. It takes a list of strings and passes
+them to "C(zypper) addlock" or "C(zypper) removelock". Presumably the strings are package
+names, but any string which can be understood by C(zypper) will work.
 
 options:
   name:
-    description: Names of packages to add or delete from the locklist.
+    description: Names of packages to add or delete from the C(locklist).
     type: list
     required: false
     elements: str
     default: []
   state:
     description:
-      - Whether to add (present) to or remove (absent) specified packages from the locklist.
-      - "present" will add a package name spec to the locklist.
-      - "absent" will remove a package name spec from the locklist.
-      - "list" will return the list of currently locked packages in 'initial_locklist'.
-      - "purge" will remove all packages from the locklist.
+      - Whether to add (C(present)) to or remove (C(absent)) specified packages from the locklist.
+      - C(present) will add a package name spec to the locklist.
+      - C(absent) will remove a package name spec from the locklist.
+      - C(list) will return the list of currently locked packages in 'initial_locklist'.
+      - C(purge) will remove all packages from the locklist.
     choices: [ 'absent', 'present', 'list', 'purge' ]
     type: str
     default: present
   pkgtype:
     description:
       - Type of package to lock.
-      - Types come from the Package Types section of the zypper manual.
-      - If not given, no -t argument will be passed to the zypper command.
-      - Currently zypper defaults to 'package'.
+      - Types come from the Package Types section of the C(zypper) manual.
+      - If not given, no -t argument will be passed to the C(zypper) command.
+      - Currently C(zypper) defaults to 'package'.
     choices: ['package', 'patch', 'pattern', 'product', 'srcpackage']
+    type: str
+    default: None
+  repo:
+    description:
+      - Restrict locks to given repository.
+      - Argument can be an alias, name, number, or URI.
+      - If not given, no -r argument will be passed to the C(zypper) command.
     type: str
     default: None
 author:
@@ -65,6 +72,12 @@ EXAMPLES = r'''
   zypper_lock:
     name: 'kernel-source'
     pkgtype: srcpackage
+    state: present
+
+- name: Lock a package and specify the repo which the lock affects.
+  zypper_lock:
+    name: 'fuse3'
+    repo: 'filesystems'
     state: present
 
 # Unlock several packages.
@@ -141,6 +154,8 @@ def process_options(options, command):
     if command in ["addlock","removelock"]:
         if options["pkgtype"] in ["package","patch","pattern","product","srcpackage"]:
             result = f"{result} -t {options['pkgtype']}"
+        if options["repo"] is not None:
+            result = f"{result} -r {options['repo']}"
 
     return result
 
@@ -154,7 +169,8 @@ def main():
         argument_spec = dict(
             name = dict(type="list", elements="str", default=[]),
             state = dict(type="str", default="present", choices=["present", "absent", "list", "purge"]),
-            pkgtype = dict(type="str", choices=["package", "patch", "pattern", "product", "srcpackage"])
+            pkgtype = dict(type="str", choices=["package", "patch", "pattern", "product", "srcpackage"]),
+            repo = dict(type="str")
         ),
         supports_check_mode=True
     )
@@ -163,7 +179,8 @@ def main():
     patterns = module.params["name"]
     state = module.params["state"]
     options = dict(
-        pkgtype=module.params["pkgtype"]
+        pkgtype=module.params["pkgtype"],
+        repo=module.params["repo"]
     )
 
     changed = False
