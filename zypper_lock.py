@@ -56,6 +56,11 @@ options:
       - If not given, no -r argument will be passed to the C(zypper) command.
     type: str
     default: None
+  message:
+    description:
+      - Add a message to a lock.
+      - Argument should be a quoted string.
+      - If not given, no -m argument will be passed to the C(zypper) command.
 author:
     - Marcus Lauer <melauer@seas.upenn.edu>
 
@@ -79,6 +84,11 @@ EXAMPLES = r'''
     name: 'fuse3'
     repo: 'filesystems'
     state: present
+
+- name: Lock a package a add a message to the lock.
+  zypper_lock:
+    name: 'zypper'
+    message: "Do not upgrade zypper"
 
 # Unlock several packages.
 - name: Unlock all installed shells.
@@ -132,13 +142,13 @@ PACKAGE_RE = re.compile("^\d+\ +\| ([^\|\ ]*)")
 
 def zypper_lock(module, command, patterns=None):
     output = []
-    command_arr = command.split(' ')
+
     if patterns is not None:
-        full_command_arr = [ZYPPER_CMD, "--quiet"] + command_arr + patterns
+        full_command_arr = [ZYPPER_CMD, "--quiet"] + command + patterns
         rc, out, err = module.run_command( full_command_arr, check_rc=True )
         output.append(out)
     else:
-        full_command_arr = [ZYPPER_CMD] + command_arr
+        full_command_arr = [ZYPPER_CMD] + command
         rc, out, err = module.run_command( full_command_arr, check_rc=True )
         for line in out.split("\n"):
             package = PACKAGE_RE.match(line)
@@ -151,11 +161,17 @@ def zypper_lock(module, command, patterns=None):
 def process_options(options, command):
     result = command
 
-    if command in ["addlock","removelock"]:
+    if command[0] in ["addlock","removelock"]:
         if options["pkgtype"] in ["package","patch","pattern","product","srcpackage"]:
-            result = f"{result} -t {options['pkgtype']}"
+            result.append("-t")
+            result.append(options['pkgtype'])
         if options["repo"] is not None:
-            result = f"{result} -r {options['repo']}"
+            result.append("-r")
+            result.append(options['repo'])
+    if command[0] in ["addlock"]:
+        if options["message"] is not None:
+            result.append("-m")
+            result.append(options['message'])
 
     return result
 
@@ -170,7 +186,8 @@ def main():
             name = dict(type="list", elements="str", default=[]),
             state = dict(type="str", default="present", choices=["present", "absent", "list", "purge"]),
             pkgtype = dict(type="str", choices=["package", "patch", "pattern", "product", "srcpackage"]),
-            repo = dict(type="str")
+            repo = dict(type="str"),
+            message = dict(type="str")
         ),
         supports_check_mode=True
     )
@@ -180,14 +197,15 @@ def main():
     state = module.params["state"]
     options = dict(
         pkgtype=module.params["pkgtype"],
-        repo=module.params["repo"]
+        repo=module.params["repo"],
+        message=module.params["message"]
     )
 
     changed = False
     msg = ""
 
     # Get the list of packages which are currently locked.
-    initial_locklist = zypper_lock(module, "locks").split("\n")
+    initial_locklist = zypper_lock(module, ["locks"]).split("\n")
 
     # Add or remove packages, but only if necessary.
     patterns_to_add = []
@@ -201,7 +219,7 @@ def main():
                     changed = True
 
         if patterns_to_add and not module.check_mode:
-            zypper_command = process_options(options, "addlock")
+            zypper_command = process_options(options, ["addlock"])
             msg = zypper_lock(module, zypper_command, patterns_to_add)
             changed = True
 
@@ -213,14 +231,14 @@ def main():
                     changed = True
 
         if patterns_to_delete and not module.check_mode:
-            zypper_command = process_options(options, "removelock")
+            zypper_command = process_options(options, ["removelock"])
             msg = zypper_lock(module, zypper_command, patterns_to_delete)
             changed = True
 
     elif state in ["purge"]:
         patterns_to_delete = initial_locklist
         if patterns_to_delete and not module.check_mode:
-            zypper_command = process_options(options, "removelock")
+            zypper_command = process_options(options, ["removelock"])
             # Instead of having to keep track of which repo each pattern is in, just remove all indexes from last to first.
             indexes_to_delete = [f'{x}' for x in reversed(range(1, len(patterns_to_delete)+1))]
             msg = zypper_lock(module, zypper_command, indexes_to_delete)
@@ -230,7 +248,7 @@ def main():
     if module.check_mode or state in ["list"]:
         final_locklist = initial_locklist
     else:
-        final_locklist = zypper_lock(module, "locks").split("\n")
+        final_locklist = zypper_lock(module, ["locks"]).split("\n")
 
     # Output a result.
     response = {
